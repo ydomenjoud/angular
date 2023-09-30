@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {CssSelector, SelectorMatcher} from '@angular/compiler/src/selector';
+import {CssSelector, CssSelectorParserErrors, SelectorMatcher} from '@angular/compiler/src/selector';
 import {el} from '@angular/platform-browser/testing/src/browser_util';
 
 {
@@ -126,45 +126,45 @@ import {el} from '@angular/platform-browser/testing/src/browser_util';
     });
 
     it('should support "$" in attribute names', () => {
-      matcher.addSelectables(s1 = CssSelector.parse('[someAttr\\$]'), 1);
+      matcher.addSelectables(s1 = CssSelector.parse('[someAttr\\$]'), 1);
 
-      expect(matcher.match(getSelectorFor({attrs: [['someAttr', '']]}), selectableCollector))
-          .toEqual(false);
+      expect(matcher.match(getSelectorFor({attrs: [['someAttr', '']]}), selectableCollector))
+        .toEqual(false);
       expect(matched).toEqual([]);
       reset();
 
-      expect(matcher.match(getSelectorFor({attrs: [['someAttr$', '']]}), selectableCollector))
-          .toEqual(true);
-      expect(matched).toEqual([s1[0], 1]);
+      expect(matcher.match(getSelectorFor({attrs: [['someAttr$', '']]}), selectableCollector))
+        .toEqual(true);
+      expect(matched).toEqual([s1[0], 1]);
       reset();
 
-      matcher.addSelectables(s1 = CssSelector.parse('[some\\$attr]'), 1);
+      matcher.addSelectables(s1 = CssSelector.parse('[some\\$attr]'), 1);
 
-      expect(matcher.match(getSelectorFor({attrs: [['someattr', '']]}), selectableCollector))
-          .toEqual(false);
+      expect(matcher.match(getSelectorFor({attrs: [['someattr', '']]}), selectableCollector))
+        .toEqual(false);
       expect(matched).toEqual([]);
 
-      expect(matcher.match(getSelectorFor({attrs: [['some$attr', '']]}), selectableCollector))
-          .toEqual(true);
-      expect(matched).toEqual([s1[0], 1]);
+      expect(matcher.match(getSelectorFor({attrs: [['some$attr', '']]}), selectableCollector))
+        .toEqual(true);
+      expect(matched).toEqual([s1[0], 1]);
       reset();
 
-      matcher.addSelectables(s1 = CssSelector.parse('[\\$someAttr]'), 1);
+      matcher.addSelectables(s1 = CssSelector.parse('[\\$someAttr]'), 1);
 
-      expect(matcher.match(getSelectorFor({attrs: [['someAttr', '']]}), selectableCollector))
-          .toEqual(false);
+      expect(matcher.match(getSelectorFor({attrs: [['someAttr', '']]}), selectableCollector))
+        .toEqual(false);
       expect(matched).toEqual([]);
 
-      expect(matcher.match(getSelectorFor({attrs: [['$someAttr', '']]}), selectableCollector))
-          .toEqual(true);
-      expect(matched).toEqual([s1[0], 1]);
+      expect(matcher.match(getSelectorFor({attrs: [['$someAttr', '']]}), selectableCollector))
+        .toEqual(true);
+      expect(matched).toEqual([s1[0], 1]);
       reset();
 
       matcher.addSelectables(s1 = CssSelector.parse('[some-\\$Attr]'), 1);
       matcher.addSelectables(s2 = CssSelector.parse('[some-\\$Attr][some-\\$-attr]'), 2);
 
-      expect(matcher.match(getSelectorFor({attrs: [['some\\$Attr', '']]}), selectableCollector))
-          .toEqual(false);
+      expect(matcher.match(getSelectorFor({attrs: [['some\\$Attr', '']]}), selectableCollector))
+        .toEqual(false);
       expect(matched).toEqual([]);
 
       expect(matcher.match(
@@ -175,13 +175,13 @@ import {el} from '@angular/platform-browser/testing/src/browser_util';
       reset();
 
 
-      expect(matcher.match(getSelectorFor({attrs: [['someattr$', '']]}), selectableCollector))
-          .toEqual(false);
+      expect(matcher.match(getSelectorFor({attrs: [['someattr$', '']]}), selectableCollector))
+        .toEqual(false);
       expect(matched).toEqual([]);
 
       expect(matcher.match(
-                 getSelectorFor({attrs: [['some-simple-attr', '']]}), selectableCollector))
-          .toEqual(false);
+        getSelectorFor({attrs: [['some-simple-attr', '']]}), selectableCollector))
+        .toEqual(false);
       expect(matched).toEqual([]);
       reset();
     });
@@ -476,17 +476,49 @@ import {el} from '@angular/platform-browser/testing/src/browser_util';
       expect(cssSelector.toString()).toEqual('*:not(.someclass[attrname=attrvalue])');
     });
 
+    it('should throw when css combinators ', () => {
+      const expectError = (selector: string) => {
+        expect(() => {
+          CssSelector.parse(selector);
+        }).toThrowMatching((error: Error) => error.message.startsWith(CssSelectorParserErrors.Combinators))
+      }
+
+      expectError('sometag [type]'); // space
+      expectError('sometag + [type]'); // +
+      expectError('sometag ~ [type]'); // ~
+      expectError('sometag > [type]'); // >
+    });
+
     it('should throw when nested :not', () => {
       expect(() => {
         CssSelector.parse('sometag:not(:not([attrname=attrvalue].someclass))')[0];
-      }).toThrowError('Nesting :not in a selector is not allowed');
+      }).toThrowError(new RegExp(CssSelectorParserErrors.NotInNot));
     });
 
     it('should throw when multiple selectors in :not', () => {
       expect(() => {
         CssSelector.parse('sometag:not(a,b)');
-      }).toThrowError('Multiple selectors in :not are not supported');
+      }).toThrowError(new RegExp(CssSelectorParserErrors.CommaInNot));
     });
+
+    it('should throw when pseudo element ', () => {
+      expect(() => {
+        CssSelector.parse('sometag::after');
+      }).toThrowError(new RegExp(CssSelectorParserErrors.PseudoElementOrClass));
+    });
+
+    it('should throw when pseudo class ', () => {
+      expect(() => {
+        CssSelector.parse('sometag:hover');
+      }).toThrowError(new RegExp(CssSelectorParserErrors.PseudoElementOrClass));
+    });
+
+    it('should throw when multiple tagName', () => {
+      expect(() => {
+        CssSelector.parse('sometag[type=text]sometag2]');
+      }).toThrowError(new RegExp(CssSelectorParserErrors.MultipleTagName));
+    });
+
 
     it('should detect lists of selectors', () => {
       const cssSelectors = CssSelector.parse('.someclass,[attrname=attrvalue], sometag');
@@ -510,6 +542,12 @@ import {el} from '@angular/platform-browser/testing/src/browser_util';
 
       expect(cssSelectors[2].element).toEqual('textbox');
       expect(cssSelectors[2].notSelectors[0].classNames).toEqual(['special']);
+    });
+
+    it('should refuse multiple tagName', () => {
+      expect(() => {
+        CssSelector.parse('input[type=text]button');
+      }).toThrowError(new RegExp(CssSelectorParserErrors.MultipleTagName));
     });
   });
 }
